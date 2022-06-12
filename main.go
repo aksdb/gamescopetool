@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -15,17 +14,14 @@ import (
 	"golang.design/x/clipboard"
 )
 
-var clientSocket = flag.String("client", "", "Name of the socket to be the client for.")
-
 func main() {
-	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
 	if err := clipboard.Init(); err != nil {
 		panic(err)
 	}
 
-	if *clientSocket != "" {
+	if os.Args[1] == "-client" {
 		runClient()
 	} else {
 		runServer()
@@ -33,10 +29,11 @@ func main() {
 }
 
 func runClient() {
-	fmt.Printf("client for %q\n", *clientSocket)
-	client, err := ipc.StartClient(*clientSocket, nil)
+	clientSocket := os.Args[2]
+	fmt.Printf("client for %q\n", clientSocket)
+	client, err := ipc.StartClient(clientSocket, nil)
 	if err != nil {
-		panic("##1 " + err.Error())
+		panic(err)
 	}
 	defer client.Close()
 
@@ -80,7 +77,7 @@ func runClient() {
 		}
 	}()
 
-	args := flag.Args()
+	args := os.Args[3:]
 	gamescopeCmd := exec.Command(args[0], args[1:]...)
 	gamescopeCmd.Run()
 }
@@ -136,7 +133,7 @@ func runServer() {
 		}
 	}()
 
-	allArgs := flag.Args()
+	allArgs := os.Args[1:]
 	var gamescopeArgs []string
 	var gameArgs = allArgs
 	for i := range allArgs {
