@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -23,16 +22,17 @@ func main() {
 		log.Fatalf("cannot initialize clipboard: %v", err)
 	}
 
-	if os.Args[1] == "-client" {
-		runClient()
+	args := ParseArgs(os.Args)
+
+	if args.ClientSocket != "" {
+		runClient(args)
 	} else {
-		runServer()
+		runServer(args)
 	}
 }
 
-func runClient() {
-	clientSocket := os.Args[2]
-	client, err := ipc.StartClient(clientSocket, nil)
+func runClient(args Args) {
+	client, err := ipc.StartClient(args.ClientSocket, nil)
 	if err != nil {
 		log.Fatalf("cannot initialize client IPC: %v", err)
 	}
@@ -78,30 +78,13 @@ func runClient() {
 		}
 	}()
 
-	args := os.Args[3:]
-	gamescopeCmd := exec.Command(args[0], args[1:]...)
+	gamescopeCmd := exec.Command(args.GameAndArgs[0], args.GameAndArgs[1:]...)
 	gamescopeCmd.Run()
 }
 
-func runServer() {
-	allArgs := os.Args[1:]
-	gamescopeArgCount := 0
-	gameCommandOffset := 0
-	for i := range allArgs {
-		if strings.HasPrefix(allArgs[i], "-") {
-			gamescopeArgCount++
-			gameCommandOffset++
-		}
-		if allArgs[i] == "--" {
-			gameCommandOffset++
-			break
-		}
-	}
-	var gamescopeArgs = allArgs[:gamescopeArgCount]
-	var gameArgs = allArgs[gameCommandOffset:]
-
+func runServer(args Args) {
 	socketName := randomName()
-	if len(gameArgs) > 0 {
+	if len(args.GameAndArgs) > 0 {
 		server, err := ipc.StartServer(socketName, nil)
 		if err != nil {
 			log.Fatalf("cannot initialize server IPC: %v", err)
@@ -151,15 +134,15 @@ func runServer() {
 		}()
 	}
 
-	var args []string
-	args = append(args, gamescopeArgs...)
-	if len(gameArgs) > 0 {
-		args = append(args, "--")
-		args = append(args, os.Args[0], "-client", socketName)
-		args = append(args, gameArgs...)
+	var cmdArgs []string
+	cmdArgs = append(cmdArgs, args.GamescopeArgs...)
+	if len(args.GameAndArgs) > 0 {
+		cmdArgs = append(cmdArgs, "--")
+		cmdArgs = append(cmdArgs, os.Args[0], "-client", socketName)
+		cmdArgs = append(cmdArgs, args.GameAndArgs...)
 	}
 
-	clientCommand := exec.Command("gamescope", args...)
+	clientCommand := exec.Command("gamescope", cmdArgs...)
 	clientCommand.Stdout = os.Stdout
 	clientCommand.Stderr = os.Stderr
 	if err := clientCommand.Run(); err != nil {
