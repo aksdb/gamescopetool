@@ -1,14 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
-	"sync"
 	"time"
 
 	ipc "github.com/james-barrow/golang-ipc"
@@ -36,46 +33,12 @@ func runClient(args Args) {
 	if err != nil {
 		log.Fatalf("cannot initialize client IPC: %v", err)
 	}
-	defer client.Close()
 
-	var mtx sync.Mutex
-	var clipboardContent = clipboard.Read(clipboard.FmtText)
-	var watchCtx, cancelWatch = context.WithCancel(context.Background())
-	defer cancelWatch()
-
-	go func() {
-		for {
-			msg, err := client.Read()
-			if err != nil {
-				fmt.Printf("got error on client read: %v\n", err)
-				break
-			}
-			if msg.MsgType == 1 {
-				mtx.Lock()
-				clipboard.Write(clipboard.FmtText, msg.Data)
-				clipboardContent = msg.Data
-				mtx.Unlock()
-			}
-		}
-	}()
-
-	for {
-		if client.StatusCode() == ipc.Connected {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	go func() {
-		clipboardChanges := clipboard.Watch(watchCtx, clipboard.FmtText)
-		for newContent := range clipboardChanges {
-			mtx.Lock()
-			if !bytes.Equal(newContent, clipboardContent) {
-				_ = client.Write(1, newContent)
-				clipboardContent = newContent
-			}
-			mtx.Unlock()
-		}
+	var syncer Syncer
+	syncer.Start(context.Background(), client)
+	defer func() {
+		client.Close()
+		syncer.Stop()
 	}()
 
 	gamescopeCmd := exec.Command(args.GameAndArgs[0], args.GameAndArgs[1:]...)
@@ -89,48 +52,24 @@ func runServer(args Args) {
 		if err != nil {
 			log.Fatalf("cannot initialize server IPC: %v", err)
 		}
-		defer server.Close()
 
-		var mtx sync.Mutex
-		var clipboardContent = clipboard.Read(clipboard.FmtText)
-		var watchCtx, cancelWatch = context.WithCancel(context.Background())
-		defer cancelWatch()
+		var syncer Syncer
+		initChan := make(chan struct{})
 
-		go func() {
-			for {
-				if server.StatusCode() == ipc.Connected {
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-
-			_ = server.Write(1, clipboardContent)
-
-			clipboardChanges := clipboard.Watch(watchCtx, clipboard.FmtText)
-			for newContent := range clipboardChanges {
-				mtx.Lock()
-				if !bytes.Equal(newContent, clipboardContent) {
-					_ = server.Write(1, newContent)
-					clipboardContent = newContent
-				}
-				mtx.Unlock()
-			}
+		defer func() {
+			<-initChan
+			server.Close()
+			// Ignore the syncer cleanup. The server doesn't properly close the socket
+			// locking the syncer in its worker loop. Until fixed, just let the OS
+			// cleanup after the process exits.
+			//syncer.Stop()
 		}()
 
 		go func() {
-			for {
-				msg, err := server.Read()
-				if err != nil {
-					fmt.Printf("got error on server read: %v\n", err)
-					break
-				}
-				if msg.MsgType == 1 {
-					mtx.Lock()
-					clipboard.Write(clipboard.FmtText, msg.Data)
-					clipboardContent = msg.Data
-					mtx.Unlock()
-				}
-			}
+			defer close(initChan)
+
+			syncer.Start(context.Background(), server)
+			syncer.ForceSync()
 		}()
 	}
 
