@@ -50,12 +50,11 @@ func TestParseArgs(t *testing.T) {
 
 		{
 			Name: "Run as client",
-			Args: []string{"foobar", "-client", "xyz", "-w", "1920", "-f", "--", "thegame", "--launch", "--steam"},
+			Args: []string{"foobar", "-client", "xyz", "thegame", "--launch", "--steam"},
 			Expected: Args{
-				Self:          "foobar",
-				GamescopeArgs: []string{"-w", "1920", "-f"},
-				GameAndArgs:   []string{"thegame", "--launch", "--steam"},
-				ClientSocket:  "xyz",
+				Self:         "foobar",
+				GameAndArgs:  []string{"thegame", "--launch", "--steam"},
+				ClientSocket: "xyz",
 			},
 		},
 	}
