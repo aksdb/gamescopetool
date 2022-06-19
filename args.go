@@ -21,20 +21,22 @@ func ParseArgs(args []string) Args {
 	result.Self = args[0]
 
 	args = args[1:]
+
+	if len(args) >= 3 && args[0] == "-client" {
+		result.ClientSocket = args[1]
+		result.GameAndArgs = args[2:]
+		return result
+	}
+
 	if strings.HasPrefix(args[0], "-") {
-	loop:
-		for i := 0; i < len(args); i++ {
-			switch {
-			case args[i] == "-client" && i+1 < len(args):
-				result.ClientSocket = args[i+1]
-				i++
-			case args[i] == "--":
+		result.GamescopeArgs = args
+		for i := range args {
+			if args[i] == "--" {
 				if i+1 < len(args) {
+					result.GamescopeArgs = args[:i]
 					result.GameAndArgs = args[i+1:]
 				}
-				break loop
-			default:
-				result.GamescopeArgs = append(result.GamescopeArgs, args[i])
+				break
 			}
 		}
 	} else {
