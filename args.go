@@ -9,7 +9,8 @@ type Args struct {
 	GamescopeArgs []string
 	GameAndArgs   []string
 
-	ClientSocket string
+	ClientSocket    string
+	ShowDummyWindow bool
 }
 
 func ParseArgs(args []string) Args {
@@ -22,9 +23,22 @@ func ParseArgs(args []string) Args {
 
 	args = args[1:]
 
-	if len(args) >= 3 && args[0] == "-client" {
+	if len(args) >= 3 && args[0] == "--client" {
 		result.ClientSocket = args[1]
-		result.GameAndArgs = args[2:]
+
+		i := 2
+	loop:
+		for i < len(args) {
+			switch args[i] {
+			case "--dummy-window":
+				result.ShowDummyWindow = true
+				i++
+			default:
+				break loop
+			}
+		}
+
+		result.GameAndArgs = args[i:]
 		return result
 	}
 
@@ -41,6 +55,18 @@ func ParseArgs(args []string) Args {
 		}
 	} else {
 		result.GameAndArgs = args
+	}
+
+	for i := 0; i < len(result.GamescopeArgs); {
+		switch result.GamescopeArgs[i] {
+		case "--dummy-window":
+			result.ShowDummyWindow = true
+		default:
+			i++
+			continue
+		}
+
+		result.GamescopeArgs = append(result.GamescopeArgs[:i], result.GamescopeArgs[i+1:]...)
 	}
 
 	return result

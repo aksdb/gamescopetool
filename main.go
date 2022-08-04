@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"time"
 
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/widget"
 	ipc "github.com/james-barrow/golang-ipc"
 	"golang.design/x/clipboard"
 )
@@ -41,8 +43,26 @@ func runClient(args Args) {
 		syncer.Stop()
 	}()
 
-	gamescopeCmd := exec.Command(args.GameAndArgs[0], args.GameAndArgs[1:]...)
-	gamescopeCmd.Run()
+	runGame := func() {
+		gamescopeCmd := exec.Command(args.GameAndArgs[0], args.GameAndArgs[1:]...)
+		gamescopeCmd.Run()
+	}
+
+	if args.ShowDummyWindow {
+		a := app.New()
+		w := a.NewWindow("gamescopetool dummy windows")
+		w.SetContent(widget.NewLabel("This is just a window to keep gamescope happy."))
+
+		go func() {
+			runGame()
+			w.Close()
+		}()
+
+		w.ShowAndRun()
+		return
+	}
+
+	runGame()
 }
 
 func runServer(args Args) {
@@ -77,7 +97,10 @@ func runServer(args Args) {
 	cmdArgs = append(cmdArgs, args.GamescopeArgs...)
 	if len(args.GameAndArgs) > 0 {
 		cmdArgs = append(cmdArgs, "--")
-		cmdArgs = append(cmdArgs, os.Args[0], "-client", socketName)
+		cmdArgs = append(cmdArgs, os.Args[0], "--client", socketName)
+		if args.ShowDummyWindow {
+			cmdArgs = append(cmdArgs, "--dummy-window")
+		}
 		cmdArgs = append(cmdArgs, args.GameAndArgs...)
 	}
 
