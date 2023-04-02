@@ -75,14 +75,17 @@ func (s *Syncer) Start(ctx context.Context, socket commSocket) {
 		close(initChan)
 
 		defer fmt.Println("clipboard listener stopped")
-		clipboardChanges := clipboard.Watch(s.ctx, clipboard.FmtText)
-		for newContent := range clipboardChanges {
-			s.mtx.Lock()
+
+		// Keep checking for clipboard changes on the host machine
+		for {
+			newContent := clipboard.Read(clipboard.FmtText)
 			if !bytes.Equal(newContent, s.clipboardContent) {
+				s.mtx.Lock()
 				_ = socket.Write(1, newContent)
 				s.clipboardContent = newContent
+				s.mtx.Unlock()
 			}
-			s.mtx.Unlock()
+			time.Sleep(500 * time.Millisecond)
 		}
 	}()
 
@@ -104,3 +107,4 @@ func (s *Syncer) Stop() {
 func (s *Syncer) ForceSync() {
 	_ = s.socket.Write(1, s.clipboardContent)
 }
+
